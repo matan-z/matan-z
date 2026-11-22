@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>matan-z defense field</title>
+<meta name="description" content="Interactive art: attack and defense on a live packet field. OSINT, SYN scan, IDS alerts, firewall drops.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=IBM+Plex+Mono:wght@400;500&family=Noto+Sans+JP:wght@400;700&display=swap" rel="stylesheet">
+<style>
+/* VOICE: quiet, precise, playful: a lab instrument you are allowed to poke
+   IDEA: a live packet field where the visitor's hand is the firewall
+   PICTURE: full-bleed canvas of spring-loaded network nodes; attacker rigs at the edges, one guarded host with an IDS ring
+   COLOUR and TYPE: paper white and ink, attack red-orange, defense blue; Archivo + Noto Sans JP, IBM Plex Mono for packets and logs
+   LAYOUT: field fills the first screen, name top-left, IDS log bottom-left, counters bottom-right; then the explainer, the layers table, about */
+:root{color-scheme:light dark;--bg:light-dark(#f5f5f1,#0d0e10);--ink:light-dark(#121212,#ededea);--mute:light-dark(#55575c,#a0a3a9);--line:light-dark(#d9d9d3,#2a2c30);--atk:light-dark(#c4330f,#ff6b47);--def:light-dark(#1d4fd8,#7aa2ff);--panel:light-dark(rgba(245,245,241,.84),rgba(13,14,16,.82))}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.75 "Archivo","Noto Sans JP",system-ui,sans-serif;overflow-x:clip}
+.mono{font-family:"IBM Plex Mono",ui-monospace,monospace}
+.band{padding:clamp(40px,6vw,96px) max(5vw,16px)}
+.wrap{max-width:1240px;margin:0 auto}
+a{color:var(--def)}a:focus-visible{outline:2px solid var(--def);outline-offset:3px}
+/* hero */
+.hero{position:relative;height:clamp(600px,100svh,920px);overflow:hidden;border-bottom:1px solid var(--line);touch-action:pan-y;cursor:crosshair;-webkit-user-select:none;user-select:none}
+.hero canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.top{position:absolute;left:max(5vw,16px);top:clamp(20px,4vw,52px);max-width:min(460px,88vw);pointer-events:none}
+.top .url{margin:0 0 6px;font-size:13px;color:var(--mute)}
+h1{margin:0;font-size:clamp(40px,6vw,56px);line-height:1.02;font-weight:800;letter-spacing:-.02em}
+.sub{margin:12px 0 0;font-size:16px;line-height:1.6;color:var(--ink);text-wrap:pretty}
+.sub small{display:block;font-size:14px;color:var(--mute);margin-top:4px}
+.phases{display:flex;flex-wrap:wrap;gap:4px 14px;margin:16px 0 0;padding:0;list-style:none;font-size:13px;color:var(--mute)}
+.phases li{display:flex;align-items:center;gap:6px;transition:color .3s}
+.phases li::before{content:"";width:7px;height:7px;border-radius:50%;border:1px solid currentColor}
+.phases li.on{color:var(--atk)}.phases li.on::before{background:currentColor}
+.hud{position:absolute;left:max(5vw,16px);right:max(5vw,16px);bottom:clamp(14px,3vw,32px);display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-end;gap:12px 24px;pointer-events:none}
+.log{margin:0;padding:10px 12px;list-style:none;font-size:13px;line-height:1.55;background:var(--panel);border:1px solid var(--line);border-radius:6px;width:min(560px,100%);min-height:calc(5 * 1.55em + 20px)}
+.log li{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--mute)}
+.log .t{opacity:.75;margin-right:8px}
+.log .alert{color:var(--atk)}.log .block,.log .you{color:var(--def)}
+.stats{display:flex;gap:22px;margin:0;padding:8px 12px;background:var(--panel);border-radius:6px}
+.stats div{display:flex;flex-direction:column}
+.stats dt{font-size:13px;color:var(--mute);order:2}
+.stats dd{margin:0;font:600 28px/1.1 "IBM Plex Mono",monospace;font-variant-numeric:tabular-nums}
+.stats .a dd{color:var(--atk)}.stats .b dd,.stats .y dd{color:var(--def)}
+/* explainer */
+h2{font-size:clamp(28px,4vw,40px);line-height:1.15;margin:0 0 12px;letter-spacing:-.01em;text-wrap:balance}
+.lead{max-width:68ch;color:var(--mute);margin:0 0 36px}
+.steps{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:28px 32px;margin:0;padding:0;list-style:none}
+.steps li{border-top:1px solid var(--ink);padding-top:14px}
+.steps svg{display:block;width:64px;height:28px;margin-bottom:10px}
+.steps h3{font-size:19px;margin:0 0 6px;line-height:1.3}
+.steps h3 span{font-size:13px;color:var(--mute);font-weight:400;margin-left:6px}
+.steps p{margin:0;font-size:15px;color:var(--mute);line-height:1.75}
+.layers{margin-top:64px}
+.layers h3{font-size:22px;margin:0 0 14px}
+table{width:100%;border-collapse:collapse;font-size:15px}
+th{text-align:left;font-weight:600;font-size:13px;color:var(--mute);border-bottom:1px solid var(--ink);padding:8px 12px 8px 0}
+td{border-bottom:1px solid var(--line);padding:12px 12px 12px 0;vertical-align:top}
+td:first-child{font-weight:600;white-space:nowrap}
+/* about */
+.about{border-top:1px solid var(--line)}
+.about .cols{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,340px),1fr));gap:32px 64px;align-items:start}
+.about p{margin:0 0 14px;max-width:62ch}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 20px;padding:0;list-style:none}
+.chips li{border:1px solid var(--ink);border-radius:999px;padding:4px 12px;font-size:14px}
+.btn{display:inline-flex;align-items:center;gap:10px;min-height:44px;padding:0 18px;border-radius:6px;background:var(--ink);color:var(--bg);text-decoration:none;font-weight:600}
+.btn:hover{background:var(--def);color:#fff}
+.foot{padding-top:24px;padding-bottom:32px;font-size:13px;color:var(--mute);border-top:1px solid var(--line)}
+.foot p{margin:0}
+@media(max-width:600px){
+  .hud{flex-direction:column;align-items:stretch}
+  .stats{justify-content:space-between}
+  .stats dd{font-size:22px}
+  .log{min-height:calc(4 * 1.55em + 20px)}
+  .log li:nth-child(n+5){display:none}
+  table{font-size:14px}.stack thead{display:none}.stack tr{display:grid;padding-block:10px;border-bottom:1px solid var(--line)}.stack td{display:flow-root;border:0;padding:3px 0;padding-inline-start:7em;text-align:start;white-space:normal}.stack td::before{content:attr(data-l);float:inline-start;width:6.5em;margin-inline-start:-7em;font-size:13px;color:var(--mute);font-weight:400}
+}
+</style>
+</head>
+<body>
+<span id="probe" hidden><i data-k="ink" style="color:var(--ink)"></i><i data-k="mute" style="color:var(--mute)"></i><i data-k="line" style="color:var(--line)"></i><i data-k="atk" style="color:var(--atk)"></i><i data-k="def" style="color:var(--def)"></i><i data-k="bg" style="color:var(--bg)"></i></span>
+
+<section class="hero" aria-label="攻撃と防御のインタラクティブアート">
+  <canvas id="cv" aria-hidden="true"></canvas>
+  <header class="top">
+    <p class="url mono">github.com/matan-z</p>
+    <h1>matan-z</h1>
+    <p class="sub">攻撃と防御を、手で触れるネットワークに。<small>マウスや指でパケットを押し返し、クリック／タップでファイアウォールのパルスを打てます。</small></p>
+    <ol class="phases" id="phases" aria-label="攻撃のフェーズ">
+      <li>Recon · OSINT</li><li>Scan · SYN</li><li>Exploit · HTTP</li><li>Brute force · GPU</li>
+    </ol>
+  </header>
+  <div class="hud">
+    <ul class="log mono" id="log" aria-live="off" aria-label="IDSログ"></ul>
+    <dl class="stats">
+      <div class="a"><dt>IDS alerts</dt><dd id="sA">0</dd></div>
+      <div class="b"><dt>blocked</dt><dd id="sB">0</dd></div>
+      <div class="y"><dt>by your hand</dt><dd id="sY">0</dd></div>
+    </dl>
+  </div>
+</section>
+
+<section class="band">
+  <div class="wrap">
+    <h2>攻撃はどう進み、どこで止めるか</h2>
+    <p class="lead">画面の中央は守るサーバー（10.0.0.10）。点線の輪がIDS、内側の輪がファイアウォールと開いているポートです。端にいる攻撃側の端末は、偵察からスキャン、侵入試行、総当たりへと手口を変えてきます。</p>
+    <ol class="steps">
+      <li>
+        <svg viewBox="0 0 64 28" aria-hidden="true"><path d="M4 22 L60 6" stroke="var(--mute)" stroke-dasharray="3 4" fill="none"/><circle cx="60" cy="6" r="3" fill="none" stroke="var(--mute)"/></svg>
+        <h3>偵察<span>OSINT</span></h3>
+        <p>DNS、証明書の公開ログ、SNS、検索エンジンなど公開情報から標的を調べる段階。相手のサーバーに通信しないのでIDSには映りません。灰色の点線がそれです。</p>
+      </li>
+      <li>
+        <svg viewBox="0 0 64 28" aria-hidden="true"><path d="M4 14 H50" stroke="var(--atk)"/><circle cx="54" cy="14" r="3.5" fill="var(--atk)"/></svg>
+        <h3>スキャン<span>SYN sweep</span></h3>
+        <p>各ポートにSYNを送り、SYN/ACKが返れば開いている、RSTなら閉じている。短時間に大量のSYNが来るパターンをIDSのシグネチャが拾ってアラートを出します。</p>
+      </li>
+      <li>
+        <svg viewBox="0 0 64 28" aria-hidden="true"><path d="M4 14 H44" stroke="var(--atk)"/><rect x="46" y="8" width="12" height="12" fill="var(--atk)" transform="rotate(45 52 14)"/></svg>
+        <h3>侵入試行<span>Exploit</span></h3>
+        <p>開いている80／443番に、攻撃文字列を仕込んだHTTPリクエストを送る。中身（L7）をパターン照合して検知し、届く前に遮断します。</p>
+      </li>
+      <li>
+        <svg viewBox="0 0 64 28" aria-hidden="true"><g fill="var(--atk)"><circle cx="10" cy="14" r="2"/><circle cx="22" cy="14" r="2"/><circle cx="34" cy="14" r="2"/><circle cx="46" cy="14" r="2"/></g><path d="M54 6 L62 22 M62 6 L54 22" stroke="var(--def)" stroke-width="2"/></svg>
+        <h3>総当たり<span>Brute force</span></h3>
+        <p>RTXを何枚も積んだ端末はハッシュのオフライン解析で桁違いに速い。ただしSSHへのオンライン総当たりでは回線とレート制限が壁。失敗5回でBANする仕組みで止めます。</p>
+      </li>
+      <li>
+        <svg viewBox="0 0 64 28" aria-hidden="true"><circle cx="32" cy="14" r="11" fill="none" stroke="var(--def)"/><circle cx="32" cy="14" r="3" fill="var(--def)"/></svg>
+        <h3>あなたの手<span>Defender</span></h3>
+        <p>カーソルや指は防御側。近づいたパケットを押し返し、触れたものは落とします。何も触らないと、自動の防御が見回りを続けます。</p>
+      </li>
+    </ol>
+
+    <div class="layers">
+      <h3>どの層で見ているか（TCP/IP）</h3>
+      <table class="stack">
+        <thead><tr><th>層</th><th>見えるもの</th><th>この画面での防御</th></tr></thead>
+        <tbody>
+          <tr><td data-l="層">L3 IP</td><td data-l="見えるもの">送信元・宛先のアドレス</td><td data-l="防御">送信元のBAN、ブロックリスト</td></tr>
+          <tr><td data-l="層">L4 TCP</td><td data-l="見えるもの">SYN・SYN/ACK・RST、宛先ポート</td><td data-l="防御">SYNスイープの検知、閉じたポートはRST</td></tr>
+          <tr><td data-l="層">L7 HTTP</td><td data-l="見えるもの">リクエストの中身</td><td data-l="防御">シグネチャ照合で攻撃文字列を検知・遮断</td></tr>
+          <tr><td data-l="層">層の外</td><td data-l="見えるもの">公開情報（DNS・証明書ログ・SNS）</td><td data-l="防御">IDSでは見えない。出す情報を減らすのが対策</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section class="band about">
+  <div class="wrap cols">
+    <div>
+      <h2>matan-z</h2>
+      <p>ネットワークとセキュリティの仕組みを押さえたうえで、現場の業務改善とAI導入を、課題の発見から実装まで伴走するエンジニアです。</p>
+      <p>通信大手グループで12年、Excel・Access・SharePointを連携させた業務自動化を手がけ、外注委託費の年5,000万円削減で社内表彰を受けました。</p>
+    </div>
+    <div>
+      <ul class="chips" aria-label="スキル">
+        <li>CCNA</li><li>TCP/IP</li><li>Linux</li><li>Python</li><li>HTML / CSS / JavaScript</li><li>AWS</li><li>VBA / Access</li><li>Claude Code · Cursor</li>
+      </ul>
+      <a class="btn" href="https://github.com/matan-z">GitHubを見る
+        <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true"><path d="M4 12 L12 4 M6 4 H12 V10" stroke="currentColor" stroke-width="1.6" fill="none"/></svg></a>
+    </div>
+  </div>
+</section>
+
+<footer class="band foot">
+  <p class="wrap">画面の通信はすべてシミュレーションです。IPアドレスは文書用の予約範囲（RFC 5737）を使っています。</p>
+</footer>
+
+<script>
+{
+const $=s=>document.querySelector(s);
+const cv=$('#cv'),ctx=cv.getContext('2d'),hero=$('.hero');
+const RM=matchMedia('(prefers-reduced-motion: reduce)').matches;
+const C={};
+const readColors=()=>{for(const s of $('#probe').children)C[s.dataset.k]=getComputedStyle(s).color};
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const rnd=(a,b)=>a+Math.random()*(b-a);
+const pick=a=>a[Math.random()*a.length|0];
+
+const PORTS=[{p:22,n:'ssh'},{p:80,n:'http',open:true},{p:443,n:'https',open:true},{p:445,n:'smb'},{p:3389,n:'rdp'},{p:8080,n:'alt'}];
+const RIGS=[
+  {ip:'203.0.113.7',tag:'kali · nmap',d:[.94,.15],m:[.9,.47]},
+  {ip:'198.51.100.23',tag:'RTX ×4 rig',gpu:true,d:[.95,.66],m:[.9,.74]},
+  {ip:'192.0.2.41',tag:'vps · scanner',d:[.5,.08],m:[.1,.74]},
+  {ip:'203.0.113.88',tag:'botnet node',d:[.04,.56],m:[.1,.49]}];
+const OSINT=['whois','crt.sh','DNS TXT','LinkedIn','shodan','GitHub','MX record','Wayback'];
+const PH=[{k:'recon',n:'Recon · OSINT'},{k:'scan',n:'Scan · SYN sweep'},{k:'exploit',n:'Exploit · HTTP payload'},{k:'brute',n:'Brute force · GPU rig'}];
+const PH_LEN=480;
+
+let W=0,H=0,small=false,gap=30,nodes=[],rigs=[],packets=[],bursts=[],pulses=[],intel=[];
+const core={x:0,y:0,r:60};
+const ptr={x:-999,y:-999,on:false,last:0};
+const st={a:0,b:0,y:0};
+let step=0,phase=-1,flash=0,coreGlow=0,lastYouLog=0,running=false,visible=true;
+
+function layout(){
+  W=hero.clientWidth;H=hero.clientHeight;small=W<640;
+  const dpr=Math.min(window.devicePixelRatio||1,2);
+  cv.width=Math.round(W*dpr);cv.height=Math.round(H*dpr);ctx.setTransform(dpr,0,0,dpr,0,0);
+  gap=small?24:30;nodes=[];
+  const cols=Math.floor(W/gap)+2,rows=Math.floor(H/gap)+2,ox=(W-(cols-1)*gap)/2,oy=(H-(rows-1)*gap)/2;
+  for(let j=0;j<rows;j++)for(let i=0;i<cols;i++){const x=ox+i*gap,y=oy+j*gap;nodes.push({hx:x,hy:y,x,y,vx:0,vy:0,h:0})}
+  core.x=small?W*.5:W*.64;core.y=small?H*.61:H*.5;core.r=Math.max(38,Math.min(W,H)*(small?.1:.095));
+  const old=rigs;
+  rigs=RIGS.map((r,i)=>{const f=small?r.m:r.d;return{...r,x:f[0]*W,y:f[1]*H,ban:old[i]?old[i].ban:0,fails:old[i]?old[i].fails:0,warned:false}});
+  packets=[];intel=[];
+}
+const portPos=(i,k=1)=>{const a=i/PORTS.length*Math.PI*2-Math.PI/2;return{x:core.x+Math.cos(a)*core.r*k,y:core.y+Math.sin(a)*core.r*k}};
+
+function log(lvl,msg){
+  const ul=$('#log'),li=document.createElement('li'),t=document.createElement('span');
+  const d=new Date();t.className='t';t.textContent=d.toTimeString().slice(0,8);
+  li.className=lvl;li.append(t,document.createTextNode(msg));ul.append(li);
+  while(ul.children.length>5)ul.firstChild.remove();
+}
+
+function spawn(rig,kind){
+  if(rig.ban>0)return;
+  let pi;
+  if(kind==='pw')pi=0;else if(kind==='payload')pi=1+(Math.random()*2|0);else if(kind==='probe')pi=-1;else pi=Math.random()*PORTS.length|0;
+  let tx,ty,label='';
+  if(kind==='probe'){tx=rnd(W*.1,W*.9);ty=rnd(H*.12,H*.88);label=pick(OSINT)}
+  else{const p=portPos(pi);tx=p.x;ty=p.y}
+  if(kind==='payload')label=pick(['${jndi:ldap', '../../etc/passwd',"' OR 1=1--",'<script>']);
+  const sp={probe:1.4,syn:2.6,payload:1.5,pw:3.4}[kind];
+  const dx=tx-rig.x,dy=ty-rig.y,d=Math.hypot(dx,dy)||1;
+  packets.push({x:rig.x,y:rig.y,vx:dx/d*sp,vy:dy/d*sp,sp,kind,pi,tx,ty,label,rig,seen:false,dead:false,age:0,trail:[]});
+}
+function ret(x,y,rig,label){
+  const dx=rig.x-x,dy=rig.y-y,d=Math.hypot(dx,dy)||1;
+  packets.push({x,y,vx:dx/d*2.4,vy:dy/d*2.4,sp:2.4,kind:'ret',tx:rig.x,ty:rig.y,label,rig,seen:true,dead:false,age:0,trail:[]});
+}
+function shock(x,y,r,f){
+  for(const n of nodes){const dx=n.x-x,dy=n.y-y,d=Math.hypot(dx,dy);if(d<r&&d>0.1){const k=(1-d/r)*f;n.vx+=dx/d*k;n.vy+=dy/d*k;n.h=Math.min(1,n.h+(1-d/r))}}
+}
+function burst(x,y,col,big){bursts.push({x,y,r:2,max:big?46:22,col});if(!RM)shock(x,y,big?90:50,big?5:2.5)}
+function youDrop(p){
+  p.dead=true;st.b++;st.y++;burst(p.x,p.y,'def',p.kind==='payload');
+  if(step-lastYouLog>50){lastYouLog=step;log('you',`manual drop  ${p.kind.toUpperCase()}  from ${p.rig.ip}`)}
+}
+
+function setPhase(i){
+  phase=i;const lis=$('#phases').children;
+  for(let k=0;k<lis.length;k++)lis[k].classList.toggle('on',k===i);
+  for(const r of rigs)r.warned=false;
+  const k=PH[i].k;
+  if(k==='recon')log('info','recon  passive OSINT: no packets reach the host, IDS sees nothing');
+  if(k==='scan')log('info','scan  SYN probes inbound on 22, 80, 443, 445, 3389, 8080');
+  if(k==='exploit')log('info','exploit  crafted HTTP requests toward open ports 80/443');
+  if(k==='brute')log('info','brute  ssh password spray from 198.51.100.23');
+}
+
+function tick(){
+  step++;
+  const ph=Math.floor(step/PH_LEN)%PH.length;if(ph!==phase)setPhase(ph);
+  const k=PH[phase].k,rate=RM?.35:1;
+  const scanners=rigs.filter(r=>!r.gpu);
+  if(k==='recon'&&step%16===0&&Math.random()<rate)spawn(pick(rigs),'probe');
+  if(k==='scan'&&step%7===0&&Math.random()<rate)spawn(pick(scanners),'syn');
+  if(k==='exploit'){if(step%38===0&&Math.random()<rate)spawn(pick([rigs[0],rigs[3]]),'payload');if(step%22===0)spawn(pick(scanners),'syn')}
+  if(k==='brute'){if(step%5===0&&Math.random()<rate)spawn(rigs[1],'pw');if(step%30===0)spawn(pick(scanners),'syn')}
+  for(const r of rigs)if(r.ban>0){r.ban--;if(r.ban===0)log('info',`fail2ban  unban ${r.ip}`)}
+
+  // pointer: real or ghost patrol
+  const now=performance.now();let px=ptr.x,py=ptr.y,pstr=1;
+  if(!ptr.on||now-ptr.last>3500){
+    if(RM){px=-999;py=-999}else{const t=step/90;px=core.x+Math.cos(t*.9)*core.r*2.5;py=core.y+Math.sin(t*1.3)*core.r*1.9;pstr=.7}
+  }
+  ptr.gx=px;ptr.gy=py;ptr.ghost=!(ptr.on&&now-ptr.last<=3500);
+  const PR=small?80:110,PR2=PR*PR;
+
+  for(const n of nodes){
+    let ax=(n.hx-n.x)*.055,ay=(n.hy-n.y)*.055;
+    const dx=n.x-px,dy=n.y-py,d2=dx*dx+dy*dy;
+    if(d2<PR2&&d2>.01){const d=Math.sqrt(d2),f=(1-d/PR)*1.9*pstr;ax+=dx/d*f;ay+=dy/d*f}
+    n.vx=(n.vx+ax)*.84;n.vy=(n.vy+ay)*.84;n.x+=n.vx;n.y+=n.vy;n.h*=.95;
+  }
+  for(const pl of pulses){
+    pl.r+=7;
+    for(const n of nodes){const dx=n.x-pl.x,dy=n.y-pl.y,d=Math.hypot(dx,dy);if(Math.abs(d-pl.r)<10&&d>0){n.vx+=dx/d*1.6;n.vy+=dy/d*1.6;n.h=Math.min(1,n.h+.4)}}
+    for(const p of packets){if(p.dead||p.kind==='ret'||p.kind==='probe')continue;const d=Math.hypot(p.x-pl.x,p.y-pl.y);if(Math.abs(d-pl.r)<14)youDrop(p)}
+  }
+  pulses=pulses.filter(p=>p.r<p.max);
+
+  const ids=core.r*1.85,fw=core.r*1.06;
+  for(const p of packets){
+    if(p.dead)continue;p.age++;
+    const dx=p.tx-p.x,dy=p.ty-p.y,d=Math.hypot(dx,dy)||1;
+    p.vx+=(dx/d*p.sp-p.vx)*.05;p.vy+=(dy/d*p.sp-p.vy)*.05;
+    if(p.kind!=='ret'&&p.kind!=='probe'){
+      const ex=p.x-px,ey=p.y-py,ed=Math.hypot(ex,ey);
+      if(ed<(small?16:20)){youDrop(p);continue}
+      if(ed<PR*.85){const f=(1-ed/(PR*.85))*.9*pstr;p.vx+=ex/ed*f;p.vy+=ey/ed*f}
+    }
+    p.x+=p.vx;p.y+=p.vy;
+    if(step%2===0){p.trail.push(p.x,p.y);if(p.trail.length>16)p.trail.splice(0,2)}
+    if(p.age>1400){p.dead=true;continue}
+    if(p.kind==='probe'){if(d<4){p.dead=true;intel.push({x:p.x,y:p.y,rx:p.rig.x,ry:p.rig.y,label:p.label,life:1})}continue}
+    if(p.kind==='ret'){if(d<6)p.dead=true;continue}
+    const dc=Math.hypot(p.x-core.x,p.y-core.y);
+    if(!p.seen&&dc<ids){
+      p.seen=true;
+      if(p.kind==='syn'&&!p.rig.warned){p.rig.warned=true;st.a++;flash=1;log('alert',`ALERT  SCAN SYN sweep  ${p.rig.ip} → 10.0.0.10`)}
+      if(p.kind==='payload'){st.a++;flash=1;log('alert',`ALERT  HTTP sig match "${p.label}"  ${p.rig.ip}`)}
+    }
+    if(dc<fw+2){
+      p.dead=true;const port=PORTS[p.pi];
+      if(p.kind==='syn'){if(port.open){coreGlow=1;ret(p.x,p.y,p.rig,'SYN/ACK')}else{st.b++;ret(p.x,p.y,p.rig,'RST');burst(p.x,p.y,'def',false)}}
+      if(p.kind==='payload'){st.b++;burst(p.x,p.y,'atk',true);log('block',`drop  ${p.rig.ip} → :${port.p}  IPS rule hit`)}
+      if(p.kind==='pw'){p.rig.fails++;burst(p.x,p.y,'atk',false);
+        if(p.rig.fails>=5){p.rig.fails=0;p.rig.ban=RM?400:420;st.b++;flash=1;log('block',`fail2ban  ban ${p.rig.ip}  sshd 5 failures`);burst(p.rig.x,p.rig.y,'def',true)}}
+    }
+  }
+  packets=packets.filter(p=>!p.dead);
+  for(const b of bursts)b.r+=(b.max-b.r)*.14+.3;
+  bursts=bursts.filter(b=>b.r<b.max-1);
+  for(const i of intel)i.life-=.008;
+  intel=intel.filter(i=>i.life>0);
+  flash*=.95;coreGlow*=.93;
+}
+
+function draw(){
+  const g=ctx;g.fillStyle=C.bg;g.fillRect(0,0,W,H);
+  const mono=(s,w=400)=>`${w} ${s}px "IBM Plex Mono", ui-monospace, monospace`;
+  // nodes + tethers
+  g.lineWidth=1;g.strokeStyle=C.mute;g.globalAlpha=.32;g.beginPath();
+  for(const n of nodes){const dx=n.x-n.hx,dy=n.y-n.hy;if(dx*dx+dy*dy>2.5){g.moveTo(n.hx,n.hy);g.lineTo(n.x,n.y)}}
+  g.stroke();
+  g.fillStyle=C.ink;g.globalAlpha=.28;
+  for(const n of nodes)g.fillRect(n.x-.9,n.y-.9,1.8,1.8);
+  g.fillStyle=C.def;
+  for(const n of nodes)if(n.h>.06){g.globalAlpha=n.h*.85;const s=1.6+n.h*2.6;g.fillRect(n.x-s/2,n.y-s/2,s,s)}
+  // OSINT intel
+  g.setLineDash([3,5]);g.strokeStyle=C.mute;g.fillStyle=C.mute;g.font=mono(small?12:13);
+  for(const i of intel){g.globalAlpha=i.life*.6;g.beginPath();g.moveTo(i.rx,i.ry);g.lineTo(i.x,i.y);g.stroke();g.globalAlpha=i.life;g.fillText(i.label,i.x+6,i.y-6)}
+  // IDS ring
+  const ids=core.r*1.85;
+  g.save();g.translate(core.x,core.y);g.rotate(step/400);
+  g.setLineDash([2,7]);g.lineWidth=1.4;g.strokeStyle=flash>.05?C.atk:C.def;g.globalAlpha=.45+flash*.5;
+  g.beginPath();g.arc(0,0,ids,0,Math.PI*2);g.stroke();g.restore();g.setLineDash([]);
+  if(flash>.05){g.globalAlpha=flash*.18;g.fillStyle=C.atk;g.beginPath();g.arc(core.x,core.y,ids,0,Math.PI*2);g.fill()}
+  g.globalAlpha=.8;g.fillStyle=C.def;g.font=mono(12,500);g.fillText('IDS',core.x+ids*.72,core.y-ids*.72);
+  // core host
+  g.globalAlpha=1;g.fillStyle=C.bg;g.strokeStyle=C.ink;g.lineWidth=1.5;
+  g.beginPath();g.arc(core.x,core.y,core.r,0,Math.PI*2);g.fill();g.stroke();
+  if(coreGlow>.05){g.globalAlpha=coreGlow*.25;g.fillStyle=C.def;g.fill()}
+  g.globalAlpha=1;g.fillStyle=C.ink;g.font=mono(small?12:13,500);g.textAlign='center';
+  g.fillText('10.0.0.10',core.x,core.y+4);
+  for(let i=0;i<PORTS.length;i++){
+    const a=portPos(i,1),b=portPos(i,1.22),o=PORTS[i];
+    g.strokeStyle=o.open?C.def:C.ink;g.lineWidth=o.open?2.4:1.2;g.beginPath();g.moveTo(a.x,a.y);g.lineTo(b.x,b.y);g.stroke();
+    if(!small||o.open){const l=portPos(i,1.42);g.fillStyle=o.open?C.def:C.mute;g.font=mono(12);g.fillText(o.p,l.x,l.y+4)}
+  }
+  g.textAlign='left';
+  // rigs
+  for(const r of rigs){
+    const left=r.x>W/2,banned=r.ban>0;
+    g.globalAlpha=banned?.35:1;g.strokeStyle=C.atk;g.fillStyle=C.bg;g.lineWidth=1.4;
+    g.fillRect(r.x-13,r.y-9,26,18);g.strokeRect(r.x-13,r.y-9,26,18);
+    if(r.gpu){g.beginPath();for(let k=0;k<4;k++){g.moveTo(r.x-9+k*6,r.y-5);g.lineTo(r.x-9+k*6,r.y+5)}g.stroke()}
+    else{g.fillStyle=C.atk;g.fillRect(r.x-8,r.y-4,7,2)}
+    g.fillStyle=C.atk;g.font=mono(small?12:13,500);g.textAlign=left?'right':'left';
+    const tx=left?r.x-20:r.x+20;g.fillText(r.ip,tx,r.y-2);
+    g.fillStyle=C.mute;g.font=mono(12);g.fillText(banned?`banned ${Math.ceil(r.ban/60)}s`:r.tag,tx,r.y+14);
+    g.textAlign='left';
+    if(banned){g.globalAlpha=1;g.strokeStyle=C.def;g.lineWidth=2;g.beginPath();g.moveTo(r.x-16,r.y-12);g.lineTo(r.x+16,r.y+12);g.moveTo(r.x+16,r.y-12);g.lineTo(r.x-16,r.y+12);g.stroke()}
+  }
+  // packets
+  for(const p of packets){
+    const col=p.kind==='ret'?C.def:p.kind==='probe'?C.mute:C.atk;
+    if(p.trail.length>2){g.globalAlpha=.4;g.strokeStyle=col;g.lineWidth=1;if(p.kind==='probe')g.setLineDash([2,4]);g.beginPath();g.moveTo(p.trail[0],p.trail[1]);for(let i=2;i<p.trail.length;i+=2)g.lineTo(p.trail[i],p.trail[i+1]);g.lineTo(p.x,p.y);g.stroke();g.setLineDash([])}
+    g.globalAlpha=1;g.fillStyle=col;g.strokeStyle=col;
+    if(p.kind==='syn'){g.beginPath();g.arc(p.x,p.y,2.8,0,Math.PI*2);g.fill()}
+    else if(p.kind==='pw'){g.fillRect(p.x-1.5,p.y-1.5,3,3)}
+    else if(p.kind==='probe'){g.beginPath();g.arc(p.x,p.y,3,0,Math.PI*2);g.stroke()}
+    else if(p.kind==='payload'){g.save();g.translate(p.x,p.y);g.rotate(Math.PI/4+p.age/30);g.fillRect(-5,-5,10,10);g.restore();
+      g.font=mono(12);g.fillText(p.label,p.x+10,p.y-8)}
+    else{g.beginPath();g.arc(p.x,p.y,2.2,0,Math.PI*2);g.fill();if(!small&&p.age<40){g.globalAlpha=1-p.age/40;g.font=mono(12);g.fillText(p.label,p.x+6,p.y-6)}}
+  }
+  // bursts + pulses
+  g.lineWidth=1.5;
+  for(const b of bursts){g.globalAlpha=1-b.r/b.max;g.strokeStyle=C[b.col];g.beginPath();g.arc(b.x,b.y,b.r,0,Math.PI*2);g.stroke()}
+  for(const pl of pulses){g.globalAlpha=(1-pl.r/pl.max)*.9;g.strokeStyle=C.def;g.lineWidth=2;g.beginPath();g.arc(pl.x,pl.y,pl.r,0,Math.PI*2);g.stroke()}
+  // defender cursor
+  if(ptr.gx>-500){g.globalAlpha=ptr.ghost?.35:.8;g.strokeStyle=C.def;g.lineWidth=1.2;g.beginPath();g.arc(ptr.gx,ptr.gy,small?16:20,0,Math.PI*2);g.stroke();g.fillStyle=C.def;g.fillRect(ptr.gx-2,ptr.gy-2,4,4)}
+  g.globalAlpha=1;
+}
+
+function stats(){$('#sA').textContent=st.a;$('#sB').textContent=st.b;$('#sY').textContent=st.y}
+
+let lastT=0,acc=0;
+function frame(t){
+  if(!running)return;
+  if(!lastT)lastT=t;acc+=Math.min(t-lastT,100);lastT=t;
+  let n=0;while(acc>=16.67&&n<4){tick();acc-=16.67;n++}
+  if(step%60===0)readColors();
+  if(step%10===0)stats();
+  draw();requestAnimationFrame(frame);
+}
+function start(){if(running||!visible||document.hidden)return;running=true;lastT=0;requestAnimationFrame(frame)}
+function stop(){running=false}
+
+const pos=e=>{const r=hero.getBoundingClientRect();return{x:e.clientX-r.left,y:e.clientY-r.top}};
+hero.addEventListener('pointermove',e=>{const p=pos(e);ptr.x=p.x;ptr.y=p.y;ptr.on=true;ptr.last=performance.now()});
+hero.addEventListener('pointerleave',()=>{ptr.on=false});
+hero.addEventListener('pointercancel',()=>{ptr.on=false});
+hero.addEventListener('pointerdown',e=>{const p=pos(e);ptr.x=p.x;ptr.y=p.y;ptr.on=true;ptr.last=performance.now();pulses.push({x:p.x,y:p.y,r:4,max:small?170:250})});
+
+const ro=new ResizeObserver(()=>{layout();if(!running)draw()});
+ro.observe(hero);
+const io=new IntersectionObserver(es=>{visible=es[0].isIntersecting;visible?start():stop()});
+io.observe(hero);
+document.addEventListener('visibilitychange',()=>{document.hidden?stop():start()});
+matchMedia('(prefers-color-scheme: dark)').addEventListener('change',readColors);
+
+readColors();layout();setPhase(0);stats();draw();start();
+}
+</script>
+</body>
+</html>
