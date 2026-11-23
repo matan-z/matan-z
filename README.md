@@ -4,6 +4,10 @@ Excel / Access VBA で業務の自動化に12年取り組んできました。�
 
 現在は Claude Code・Codex などの AI コーディングエージェントを使い、Web アプリの開発に取り組んでいます。AI にコードを書かせるだけでなく、**AI の出力をテストや検証の仕組みで確かめ、どこで人が判断するかを設計すること**を大切にしています。
 
+<a href="https://matan-z.github.io/matan-z/defense-field/">
+  <img src="assets/banner.svg" width="100%" alt="matan-z：攻撃と防御を、手で触れるネットワークに（インタラクティブアートを開く）">
+</a>
+
 ## 公開中のプロジェクト
 
 | プロジェクト | 内容 | 主な技術 |
